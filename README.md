@@ -1,2 +1,1 @@
-# hexagon-illusion
-Hexagon Illusion
+# Hexagon Illusion
