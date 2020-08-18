@@ -1,3 +1,4 @@
+// by @frfernandez 
 debug = function() { console.debug(...arguments); };
 
 const Illusion = (function() {
@@ -7,8 +8,11 @@ const Illusion = (function() {
   const self = this;
   
   // Static 
-  SIZE  = 25;
-  HEXAS = 18;
+  SIZE  = 18;
+  ITEM  = 18;
+  STEP  = 8;
+  LINE  = 2.5;
+  GAP   = Math.floor(STEP - LINE);
 
   self.element = document.querySelector('#canvas');
 
@@ -22,13 +26,18 @@ const Illusion = (function() {
   self.y = self.Y / 2;
 
   // Direction coords
-  self.coords = [0, 0];
+  self.coords = { x: self.x, y: self.y};
   
+  
+  self._rotateZ = false;
+
   // Array with all offset and edge
-  self.position = Array(HEXAS).fill(0);
+  self.position = Array(ITEM)
   self.edge = 0;
 
   self.colors = ['#FFF','rgb(140, 84, 41)', 'rgb(84, 51, 26)'];
+
+  self.busy = false;
 
   self._context = function() {
     return this.ctx = this.canvas.getContext('2d');
@@ -37,45 +46,30 @@ const Illusion = (function() {
   // Get context
   const ctx = self._context();
 
-  ctx.save();
-
-  ctx.init = function() {
-    this.base();
-    this.draw();
+  ctx._base = function() {
+    this._make(self.x, self.y, self.x, 1, null, self.colors[1]);
+    this._make(self.x, self.y, (self.x - STEP - LINE), 1, null, self.colors[2]);
   };
 
-  ctx.base = function() {
-    this.make(self.x, self.y, 176, 1, null, self.colors[1]);
-    this.make(self.x, self.y, 170, 1, null, self.colors[2]);
-  };
-
-  ctx.draw = function() {
-    for (let index=0, size=SIZE; index<HEXAS; index++, size+=8) {      
-      if (self.edge === index && self.position[index] && !(self.position[index]%5) && self.edge < HEXAS) {
-        self.edge++;
-      }
-
-      if (self.edge >= index)
-        self.position[index]++;
-
-      let [x, y] = self._computed(index);
-      let strokeStyle = self.colors[0];
-      let fillStyle = index === 0 ? self.colors[0]: null;
-      
-      this.make(x, y, size, 2.4, strokeStyle, fillStyle); 
+  ctx._draw = function() {
+    for (const {coords, size, line, stroke, fill, rotate} of self.position) {
+      const {x, y} = coords;
+      this._make(x, y, size, line, stroke, fill, rotate);
     }
   };
 
-  ctx.make = function(x, y, size, lineWidth=10, strokeStyle=null, fillStyle=null) {
+  ctx._make = function(x, y, size, lineWidth=10, strokeStyle=null, fillStyle=null, rotate=0) {
     this.beginPath();
     this.lineWidth = lineWidth;
-    this.moveTo(x + size * Math.cos(0), y + size * Math.sin(0));
+    this.moveTo(x + size * Math.cos(rotate), y + size * Math.sin(rotate));
     
     for (let side=0; side < 7; side++) {
-      const sx = x + size * Math.cos(side * 2 * Math.PI / 6),
-            sy = y + size * Math.sin(side * 2 * Math.PI / 6);
+      const sx = x + size * Math.cos(rotate + (side * 2 * Math.PI / 6)),
+            sy = y + size * Math.sin(rotate + (side * 2 * Math.PI / 6));
       
+      // debug(x, y, sx, sy, side, size)
       this.lineTo(sx, sy);
+
     }
 
     if (strokeStyle) {
@@ -89,84 +83,119 @@ const Illusion = (function() {
     }
   };
 
-  self._computed = function(index) {
-    let x = this.x;
-    let y = this.y;
-    let offset = this.position[index];
-
-    let [cx, cy] = this.coords;
-
-    if (!cx && !cy)
-      return [x, y];
-
-    // it move to left 
-    if (cx > 0)
-      x += offset;
-    // it move to right
-    if (cx < 0)
-      x -= offset;
-    // it move to up
-    if (cy > 0)
-      y += offset;
-    // it move to down
-    if (cy < 0)
-      y -= offset;
-
-    return [x, y];
-  };
-
-  self.init = () => ctx.init();
-
-  self._animate = function() {
-    ctx.init();
-    
-    if (this.edge === HEXAS) {
-      this.position = Array(HEXAS).fill(0);
-      this.edge = 0;
-      return cancelAnimationFrame(this.rid);
+  self._init = function() {
+    for (let index = 0; index < this.position.length; index++) {
+      const b = this.position[index] = {};
+      
+      b.coords = {}
+      b.coords.x = this.x, 
+      b.coords.y = this.y;
+      b.size = SIZE + STEP * index;
+      b.line = LINE;
+      b.stroke = this.colors[0];
+      b.fill = index === 0 ? this.colors[0] : null;
+      b.rotate = 0;
     }
 
-    this.rid = requestAnimationFrame(this._animate.bind(this));
+    // this._makeCursor();
+    ctx._base();
+    ctx._draw();
+  };
+
+  self._computed = function() {
+    for (let index=0; index < this.position.length; index++) {
+      const current = this.position[index];
+      const next = this.position[index +1];
+      
+      if (!next)
+        continue; 
+
+      if (this.coords.x < 251 && this.coords.x > 98) {
+        if (current.coords.x >= next.coords.x + GAP)
+          next.coords.x += 1;
+      
+        if (current.coords.x <= next.coords.x - GAP)  
+          next.coords.x -= 1;
+      }
+
+      if (this.coords.y < 231 && this.coords.y > 80) {
+        if (current.coords.y >= next.coords.y + GAP)
+          next.coords.y += 1;
+        
+        if (current.coords.y <= next.coords.y - GAP)
+          next.coords.y -= 1;
+      }
+    }
+    ctx._base();
+    ctx._draw();
+  };
+
+  self._clear = function() {
+    ctx.clearRect(0,0, this.X, this.Y);
   }
 
-  self.moveTo = function(coords) {
-    this.coords = coords;
+  self._animate = function() {
+    this._clear();
+    this.position[0].coords = this.coords;
+    // this._cursor();
+    this._computed();
+  }
 
-    this._animate();
+  self._moveAt = function(e) {
+    this.coords = {x: e.offsetX, y: e.offsetY};
+    requestAnimationFrame(this._animate.bind(this));
+  };
+	
+	self._computedRotate = function() {
+		for (let index=0; index < this.position.length; index++) {
+      const current = this.position[index];
+      const next = this.position[index +1];
+      const limit = GAP * GAP/(index+GAP);
+
+      if (!next)
+        continue;
+
+      if (this._rotateZ && this.position[0].rotate === 0)
+        this._rotateZ = false;
+
+      if (!this._rotateZ && this.position[this.position.length -2].rotate === 2) {
+        this._rotateZ = true;
+        break;
+      }
+			
+			if (!this._rotateZ && current.rotate >= next.rotate + limit)
+        next.rotate += 1; 
+      
+      if (this._rotateZ && current.rotate !== 0 && current.rotate <= next.rotate)
+        next.rotate -= 1; 
+    }
+    ctx._base();
+    ctx._draw();
+	}
+
+  self._rotate = function() {
+    if (this._rotateZ)
+      this.position[0].rotate -= 1;
+    else
+      this.position[0].rotate += 1;
+
+		this._computedRotate();
   };
 
-  self.rotate = function(degrade) {
 
+  self._init();
+  self.canvas.onmousedown = () => {
+
+    self.canvas.onmousemove = (e) => self._moveAt(e);
+    
+    self.canvas.onmouseup = () => {
+      self.canvas.onmousemove = null;
+      self.canvas.onmouseup = null;
+    }
   };
-
-
+	
+	self.canvas.onclick = () => self._rotate();
 });
 
 const illusion = new Illusion();
-illusion.init();
-
-
-// document.querySelector('#canvas > canvas').addEventListener('mousemove', debug)
-
-window.addEventListener('keyup', (e) => {
-  if ([40,38,39,37].indexOf(e.which) < 0)
-    return;
-  
-  switch(e.which) {
-    case 40: // key up
-      illusion.moveTo([0, 1]);
-      break;
-    case 38: // key down
-      illusion.moveTo([0, -1]);
-      break;
-    case 39: // key left
-      illusion.moveTo([1, 0]);
-      break;
-    case 37: // key right
-      illusion.moveTo([-1, 0]);
-      break;
-  }
-});
-
-
 
