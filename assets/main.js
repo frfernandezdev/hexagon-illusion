@@ -1,4 +1,7 @@
-// by @frfernandez 
+/* 
+	by @frfernandez 
+	https://github.com/frfernandezdev/hexagon-illusion
+*/ 
 debug = function() { console.debug(...arguments); };
 
 const Illusion = (function() {
@@ -27,9 +30,15 @@ const Illusion = (function() {
 
   // Direction coords
   self.coords = { x: self.x, y: self.y};
-  
-  
+
+  // indicator animation rotate status
+  self.active = false;
+
+  // indicator direction of rotate increase/decrease
   self._rotateZ = false;
+
+  // identifier of requestAnimationFrame
+  self.rId = null;
 
   // Array with all offset and edge
   self.position = Array(ITEM)
@@ -134,31 +143,29 @@ const Illusion = (function() {
     ctx.clearRect(0,0, this.X, this.Y);
   }
 
-  self._animate = function() {
-    this._clear();
-    this.position[0].coords = this.coords;
-    // this._cursor();
-    this._computed();
-  }
-
   self._moveAt = function(e) {
     this.coords = {x: e.offsetX, y: e.offsetY};
-    requestAnimationFrame(this._animate.bind(this));
+    this._clear();
+    this.position[0].coords = this.coords;
+    requestAnimationFrame(this._computed.bind(this));
   };
 	
 	self._computedRotate = function() {
-		for (let index=0; index < this.position.length; index++) {
+    for (let index=0; index < this.position.length; index++) {
       const current = this.position[index];
       const next = this.position[index +1];
       const limit = GAP * GAP/(index+GAP);
 
       if (!next)
-        continue;
+        continue; 
 
-      if (this._rotateZ && this.position[0].rotate === 0)
+      if (this._rotateZ && this.position[0].rotate === 0) {
+        this.active = false;
         this._rotateZ = false;
+      }
 
       if (!this._rotateZ && this.position[this.position.length -2].rotate === 2) {
+        this.active = false;
         this._rotateZ = true;
         break;
       }
@@ -178,24 +185,37 @@ const Illusion = (function() {
       this.position[0].rotate -= 1;
     else
       this.position[0].rotate += 1;
+    
+    if (!this.active) {
+      cancelAnimationFrame(this.rId);
+      return;
+    }
 
-		this._computedRotate();
+    this._computedRotate();
+    self.rId = requestAnimationFrame(this._rotate.bind(this));
   };
 
+  self.onclick = function() {
+    if (self.active)
+      return;
+
+    self.active = true;
+    self._rotate();
+  }
 
   self._init();
-  self.canvas.onmousedown = () => {
 
-    self.canvas.onmousemove = (e) => self._moveAt(e);
-    
-    self.canvas.onmouseup = () => {
-      self.canvas.onmousemove = null;
-      self.canvas.onmouseup = null;
-    }
+  window.onload = () => {
+    self.canvas.onmousedown = () => {  
+      self.canvas.onmousemove = (e) => self._moveAt(e);
+      self.canvas.onmouseup = () => {
+        self.canvas.onmousemove = null;
+        self.canvas.onmouseup = null;
+      };
+    };
+    self.canvas.ondblclick = self.onclick.bind(self);
   };
-	
-	self.canvas.onclick = () => self._rotate();
+  
 });
 
 const illusion = new Illusion();
-
