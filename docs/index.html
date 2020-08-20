@@ -288,6 +288,11 @@
             self.canvas.onmouseup = null;
           };
         };
+
+        const rect =  self.canvas.getBoundingClientRect();
+        self.canvas.ontouchmove = (e) => {
+          self._moveAt({offsetX: e.changedTouches[0].pageX - rect.x, offsetY: e.changedTouches[0].pageY - rect.y});
+        };
         self.canvas.ondblclick = self.onclick.bind(self);
       };
       
